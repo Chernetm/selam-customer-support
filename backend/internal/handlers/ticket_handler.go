@@ -1,0 +1,385 @@
+package handlers
+
+import (
+	"customer-help-center-backend/internal/models"
+	"customer-help-center-backend/internal/service"
+	"fmt"
+	"net/http"
+	"strconv"
+	"time"
+
+	"github.com/gin-gonic/gin"
+)
+
+type TicketHandler struct {
+	service       service.TicketService
+	ratingService service.RatingService
+}
+
+func NewTicketHandler(service service.TicketService, ratingService service.RatingService) *TicketHandler {
+	return &TicketHandler{
+		service:       service,
+		ratingService: ratingService,
+	}
+}
+
+func (h *TicketHandler) CreateTicket(c *gin.Context) {
+	var ticket models.Ticket
+	if err := c.ShouldBindJSON(&ticket); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input"})
+		return
+	}
+
+	// Get Customer ID from context (set by Middleware)
+	customerID, exists := c.Get("customer_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized: No customer ID found"})
+		return
+	}
+
+	// Assign Customer ID to ticket
+	idUint, ok := customerID.(uint)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal Error: Invalid customer ID type"})
+		return
+	}
+	ticket.CustomerID = idUint
+
+	createdTicket, err := h.service.CreateTicket(&ticket)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusCreated, createdTicket)
+}
+
+func (h *TicketHandler) GetTicket(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID"})
+		return
+	}
+
+	// Get Customer ID (optional, e.g. for admin it might be missing or we use admin flow)
+	// But if middleware sets it, we use it for filtering.
+	var customerID uint
+	if val, exists := c.Get("customer_id"); exists {
+		if idUint, ok := val.(uint); ok {
+			customerID = idUint
+		}
+	}
+
+	ticket, err := h.service.GetTicketByID(uint(id), customerID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Ticket not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, ticket)
+}
+
+func (h *TicketHandler) GetAllTickets(c *gin.Context) {
+	var tickets []models.Ticket
+	var err error
+
+	// Check for customer_id in context
+	if customerID, exists := c.Get("customer_id"); exists {
+		// If called by customer, return only their tickets
+		idUint, ok := customerID.(uint)
+		if !ok {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal Error: Invalid customer ID type"})
+			return
+		}
+		tickets, err = h.service.GetCustomerTickets(idUint)
+	}
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, tickets)
+}
+
+func (h *TicketHandler) GetAgentTickets(c *gin.Context) {
+	var tickets []models.Ticket
+	var err error
+
+	// Check for admin_id in context (same style as customer)
+	if adminID, exists := c.Get("admin_id"); exists {
+		// If called by agent, return only their tickets
+		idUint, ok := adminID.(uint64)
+		if !ok {
+			fmt.Println("GetAgentTickets Handler: Invalid admin ID type")
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": "Internal Error: Invalid admin ID type",
+			})
+			return
+		}
+		fmt.Printf("GetAgentTickets Handler: Calling service with ID: %d\n", idUint)
+		tickets, err = h.service.GetAgentTickets(idUint)
+		fmt.Printf("GetAgentTickets Handler: Service returned %d tickets, err: %v\n", len(tickets), err)
+	}
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, tickets)
+}
+
+func (h *TicketHandler) CloseTicket(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID"})
+		return
+	}
+
+	var req struct {
+		Summary string `json:"summary"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input"})
+		return
+	}
+
+	adminID, exists := c.Get("admin_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	ticket, err := h.service.CloseTicket(uint(id), adminID.(uint64), req.Summary)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Ticket " + idStr + " closed successfully", "ticket": ticket})
+}
+
+
+func (h *TicketHandler) ReassignTicket(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID"})
+		return
+	}
+
+	var req struct {
+		NewAgentID uint64 `json:"newAgentId" binding:"required"`
+		Reason     string `json:"reason"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input"})
+		return
+	}
+
+	adminID, exists := c.Get("admin_id") // changed from managerID to reflect versatility
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	if err := h.service.ReassignTicket(uint(id), req.NewAgentID, adminID.(uint64), req.Reason); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Ticket reassigned successfully"})
+}
+
+func (h *TicketHandler) EscalateTicket(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID"})
+		return
+	}
+
+	var req struct {
+		ManagerID uint64 `json:"managerId" binding:"required"`
+		Reason    string `json:"reason" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input"})
+		return
+	}
+
+	adminID, exists := c.Get("admin_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	if err := h.service.EscalateTicket(uint(id), req.ManagerID, adminID.(uint64), req.Reason); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Ticket escalated successfully"})
+}
+
+func (h *TicketHandler) CreateRating(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid Ticket ID"})
+		return
+	}
+
+	var req struct {
+		// CustomerID is taken from the ticket, not the body
+		Score   int    `json:"score"`
+		Comment string `json:"comment"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input"})
+		return
+	}
+
+	// Get Customer ID from context (set by Middleware)
+	customerIDCtx, exists := c.Get("customer_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized: No customer ID found"})
+		return
+	}
+	customerID, ok := customerIDCtx.(uint)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal Error: Invalid customer ID type"})
+		return
+	}
+
+	rating, err := h.ratingService.CreateRating(uint(id), customerID, req.Score, req.Comment)
+	if err != nil {
+		if err.Error() == "ticket not closed" || err.Error() == "rating already exists" {
+			c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
+			return
+		}
+		if err.Error() == "unauthorized: ticket does not belong to customer" {
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+			return
+		}
+		if err.Error() == "ticket not found" {
+			c.JSON(http.StatusNotFound, gin.H{"message": "Ticket not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Server error"})
+		return
+	}
+
+	c.JSON(http.StatusCreated, rating)
+}
+
+func (h *TicketHandler) GetRating(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid Ticket ID"})
+		return
+	}
+
+	var customerID uint
+	if val, exists := c.Get("customer_id"); exists {
+		if idUint, ok := val.(uint); ok {
+			customerID = idUint
+		}
+	}
+
+	rating, err := h.ratingService.GetRating(uint(id), customerID)
+	if err != nil {
+		if err.Error() == "ticket not found" {
+			c.JSON(http.StatusNotFound, gin.H{"message": "Ticket not found"})
+			return
+		}
+		if err.Error() == "unauthorized: ticket does not belong to customer" {
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Server error"})
+		return
+	}
+	if rating == nil {
+		// If ticket exists but no rating, user code returns null
+		c.JSON(http.StatusOK, nil)
+		return
+	}
+
+	c.JSON(http.StatusOK, rating)
+}
+
+func (h *TicketHandler) DeleteTicket(c *gin.Context) {
+	fmt.Println("TicketHandler.DeleteTicket called")
+	idStr := c.Param("id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID"})
+		return
+	}
+
+	// 1. Check for Customer ID
+	var customerID uint
+	if val, exists := c.Get("customer_id"); exists {
+		if idUint, ok := val.(uint); ok {
+			customerID = idUint
+		}
+	}
+
+	// 2. Check for Admin ID (if no customer_id, it might be an admin request)
+	isAdmin := false
+	if val, exists := c.Get("admin_id"); exists {
+		if _, ok := val.(uint); ok { // Assuming admin_id is uint
+			isAdmin = true
+		} else if _, ok := val.(uint64); ok {
+			isAdmin = true
+		}
+	}
+
+	fmt.Printf("DeleteTicket Handler: ID=%d, CustomerID=%d, IsAdmin=%v\n", id, customerID, isAdmin)
+
+	// If it's not a customer and not an admin, it's unauthorized (though middleware should catch this)
+	if customerID == 0 && !isAdmin {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	if err := h.service.DeleteTicket(uint(id), customerID); err != nil {
+		fmt.Printf("DeleteTicket Service Error: %v\n", err)
+		if err.Error() == "ticket not found" {
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Ticket deleted successfully"})
+}
+
+func (h *TicketHandler) GetTicketReports(c *gin.Context) {
+	period := c.DefaultQuery("period", "weekly")
+	var startDate time.Time
+	endDate := time.Now()
+
+	switch period {
+	case "weekly":
+		startDate = endDate.AddDate(0, 0, -7)
+	case "monthly":
+		startDate = endDate.AddDate(0, -1, 0)
+	default:
+		startDate = endDate.AddDate(0, 0, -7)
+	}
+
+	reportResponse, err := h.service.GetTicketReports(startDate, endDate)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch reports: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, reportResponse)
+}

@@ -1,0 +1,22 @@
+version: "3.9"
+
+services:
+  backend:
+    build: ./backend
+    container_name: go_backend
+    ports:
+      - "8090:8090"
+    restart: always
+    env_file:
+      - ./backend/.env
+
+  frontend:
+    build: ./next-frontend
+    container_name: next_frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    environment:
+      - NEXT_PUBLIC_API_URL=http://backend:8090
+    restart: always
