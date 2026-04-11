@@ -84,6 +84,7 @@ func (h *TicketHandler) GetAllTickets(c *gin.Context) {
 	var tickets []models.Ticket
 	var err error
 
+	search := c.Query("search")
 	// Check for customer_id in context
 	if customerID, exists := c.Get("customer_id"); exists {
 		// If called by customer, return only their tickets
@@ -92,7 +93,7 @@ func (h *TicketHandler) GetAllTickets(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal Error: Invalid customer ID type"})
 			return
 		}
-		tickets, err = h.service.GetCustomerTickets(idUint)
+		tickets, err = h.service.GetCustomerTickets(idUint, search)
 	}
 
 	if err != nil {
@@ -119,7 +120,8 @@ func (h *TicketHandler) GetAgentTickets(c *gin.Context) {
 			return
 		}
 		fmt.Printf("GetAgentTickets Handler: Calling service with ID: %d\n", idUint)
-		tickets, err = h.service.GetAgentTickets(idUint)
+		search := c.Query("search")
+		tickets, err = h.service.GetAgentTickets(idUint, search)
 		fmt.Printf("GetAgentTickets Handler: Service returned %d tickets, err: %v\n", len(tickets), err)
 	}
 
@@ -160,6 +162,32 @@ func (h *TicketHandler) CloseTicket(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Ticket " + idStr + " closed successfully", "ticket": ticket})
+}
+
+func (h *TicketHandler) InviteInPerson(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID"})
+		return
+	}
+
+	adminID, exists := c.Get("admin_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	ticket, err := h.service.InviteInPerson(uint(id), adminID.(uint64))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "In-person visit invitation sent",
+		"ticket":  ticket,
+	})
 }
 
 

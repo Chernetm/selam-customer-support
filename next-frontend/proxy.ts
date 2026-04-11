@@ -10,19 +10,21 @@ export function proxy(request: NextRequest) {
   const customerToken = request.cookies.get('customerToken')?.value;
   const role = request.cookies.get('role')?.value;
 
+  console.log(`[Proxy] Path: ${pathname} | Admin: ${!!adminToken} | Customer: ${!!customerToken} | Role: ${role}`);
+
   // 1. Defining route categories
-  const isSuperAdminRoute = 
-    pathname === '/dashboard' || 
-    pathname === '/admin-register' || 
-    pathname.startsWith('/admin/dashboard') || 
-    pathname.startsWith('/admin/system') || 
+  const isSuperAdminRoute =
+    pathname === '/dashboard' ||
+    pathname === '/admin-register' ||
+    pathname.startsWith('/admin/dashboard') ||
+    pathname.startsWith('/admin/system') ||
     pathname.startsWith('/admin/performance');
 
   const isAdminRoute = pathname.startsWith('/admin/') || isSuperAdminRoute;
   const isCustomerRoute = pathname.startsWith('/chat');
-  const isAuthRoute = 
-    pathname === '/login' || 
-    pathname === '/admin-login' || 
+  const isAuthRoute =
+    pathname === '/login' ||
+    pathname === '/admin-login' ||
     pathname === '/customer-register';
 
   // 2. Implementation of Role-Based Access Control (RBAC)
@@ -35,7 +37,7 @@ export function proxy(request: NextRequest) {
     }
 
     // Role check for SuperAdmin restricted pages
-    const isSuperAdmin = role === 'super_admin' || role === 'super-admin';
+    const isSuperAdmin = role === 'super-admin';
     if (isSuperAdminRoute && !isSuperAdmin) {
       // Staff trying to access management pages -> Redirect to Chat
       return NextResponse.redirect(new URL('/admin/chat', request.url));
@@ -49,9 +51,14 @@ export function proxy(request: NextRequest) {
   }
 
   // C. Authenticated Redirects (Prevention of redundant logins)
-  if (isAuthRoute && adminToken) {
-    const isSuperAdmin = role === 'super_admin' || role === 'super-admin';
-    return NextResponse.redirect(new URL(isSuperAdmin ? '/dashboard' : '/admin/chat', request.url));
+  if (isAuthRoute) {
+    if (adminToken) {
+      const isSuperAdmin = role === 'super_admin' || role === 'super-admin';
+      return NextResponse.redirect(new URL(isSuperAdmin ? '/dashboard' : '/admin/chat', request.url));
+    }
+    if (customerToken) {
+      return NextResponse.redirect(new URL('/chat', request.url));
+    }
   }
 
   // Allow the request to proceed to the route handler / page

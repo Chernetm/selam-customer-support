@@ -129,6 +129,8 @@ export const en = {
       rateFailure: "Failed to submit evaluation."
     },
     searchPlaceholder: "Search transmissions...",
+    searchAgentPlaceholder: "Search agent name...",
+    searchCustomerPlaceholder: "Search customer name...",
     noTransmissions: "No Transmissions",
     noTransmissionsSub: "Initiate a secure link using the (+) button to begin.",
     establishLink: "Establish Secure Link",
@@ -188,7 +190,7 @@ export const en = {
     strongerPassword: "Please use a stronger password",
     registrationSuccess: "Account created successfully",
     registrationFailed: "Registration failed.",
-    loginFailed: "Login failed. Please check your credentials and try again.",
+    loginFailed: "Invalid email or password. Please check your credentials and try again.",
     empoweringSupport: "Empowering Support",
     welcomeBackPortal: "Welcome back to your portal",
     freeAccountDesc: "It's free and takes less than a minute.",

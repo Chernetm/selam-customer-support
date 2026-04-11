@@ -45,6 +45,10 @@ type Ticket struct {
 	// SLA (only deadline stays here)
 	DeadlineAt *time.Time `gorm:"index" json:"deadlineAt"`
 
+	// In-Person Invitation
+	InviteCode      string     `json:"inviteCode"`
+	InviteExpiresAt *time.Time `json:"inviteExpiresAt"`
+
 	// Closure
 	ResolutionSummary string `json:"resolutionSummary"`
 	ClosedBy          *uint64  `json:"closedBy"`

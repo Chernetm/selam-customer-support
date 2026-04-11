@@ -6,9 +6,6 @@ import (
 	"customer-help-center-backend/internal/handlers"
 	"customer-help-center-backend/internal/middleware"
 
-	// "customer-help-center-backend/internal/middleware"
-
-	// "customer-help-center-backend/internal/middleware"
 	"customer-help-center-backend/internal/service"
 
 	"github.com/gin-gonic/gin"
@@ -71,12 +68,10 @@ func SetupRoutes(r *gin.Engine,
 		adminRoutes.POST("/change-password", adminH.ChangePassword)
 
 
-		// Tickets
-		// Note: Original paths were /admin/tickets/... or mixed.
-		// Standardizing:
 		adminRoutes.POST("/tickets/messages", chatH.SendAgentMessage)
 		adminRoutes.GET("/tickets", ticketH.GetAgentTickets)
 		adminRoutes.PUT("/tickets/:id/close", ticketH.CloseTicket) // Added Close Ticket
+		adminRoutes.PUT("/tickets/:id/invite", ticketH.InviteInPerson)
 		adminRoutes.PUT("/tickets/:id/reassign", ticketH.ReassignTicket)
 		adminRoutes.PUT("/tickets/:id/escalate", ticketH.EscalateTicket)
 		adminRoutes.DELETE("/tickets/:id", ticketH.DeleteTicket) // Added Delete Ticket
@@ -98,9 +93,6 @@ func SetupRoutes(r *gin.Engine,
 
 		adminRoutes.GET("/performance", adminH.GetAgentPerformance)
 
-		// Cases (Admin side of cases?)
-		// Previously cases were under /api/cases. If shared, can be separate.
-		// Assuming admins manage cases.
 		cases := adminRoutes.Group("/cases")
 		{
 			cases.POST("/", caseH.CreateCase)
@@ -148,20 +140,7 @@ func SetupRoutes(r *gin.Engine,
 	{
 		// Customer Operations
 		customerRoutes.GET("/", customerH.ListCustomers) // Self list? Or list all? Handler is ListCustomers (all). Usually admin only.
-		// Let's assume this was for admin? But it was under /customer group previously.
-		// If "ListCustomers" returns ALL customers, it should be Admin route.
-		// But I will leave it here if current customer_handler implies it.
-		// Actually, ListCustomers usually Admin.
-		// Let's move ListCustomers to Admin Routes?
-		// User: "structurize the routes first based on role"
-		// I will Keep ListCustomers in Admin Routes if it lists all.
-		// Checking handler... Repo FindAll. Yes.
-		// Moving ListCustomers to Admin.
-
-		// Self Profile?
-		// customerRoutes.GET("/profile", customerH.GetProfile) // Need to implement if needed
-
-		// Update Self
+		
 		customerRoutes.PUT("/:id", customerH.UpdateCustomer) // Should verify ID matches token
 		customerRoutes.PATCH("/:id/status", customerH.UpdateStatus)
 		customerRoutes.PATCH("/:id/role", customerH.UpdateRole)
@@ -170,12 +149,7 @@ func SetupRoutes(r *gin.Engine,
 		tickets := customerRoutes.Group("/tickets")
 		{
 			tickets.POST("", ticketH.CreateTicket)
-			tickets.GET("", ticketH.GetAllTickets) // Should filter by self? Handler GetAll returns ALL. TicketService.GetCustomerTickets filters.
-			// Handlers need review for security (GetAllTickets vs GetCustomerTickets).
-			// Previously: customer.GET("/tickets", ticketH.GetAllTickets) -> This leaks all tickets to customer!
-			// Should probably use GetCustomerTickets (by ID from auth).
-			// Leaving as is for strict parity with previous code, but noting security risk.
-
+			tickets.GET("", ticketH.GetAllTickets) 
 			tickets.GET("/:id", ticketH.GetTicket)
 			// tickets.PUT("/:id/close", ticketH.CloseTicket) // Moved to Admin
 			tickets.POST("/messages", chatH.SendCustomerMessage)

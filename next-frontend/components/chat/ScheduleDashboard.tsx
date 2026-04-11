@@ -19,6 +19,7 @@ import clsx from 'clsx';
 interface ScheduleDashboardProps {
     tickets: ChatTicket[];
     onSelectTicket: (ticket: ChatTicket) => void;
+    onBack?: () => void;
 }
 
 const PRIORITY_SLA: Record<string, number> = {
@@ -35,7 +36,7 @@ const PRIORITY_WEIGHT: Record<string, number> = {
     'Low': 1
 };
 
-export function ScheduleDashboard({ tickets, onSelectTicket }: ScheduleDashboardProps) {
+export function ScheduleDashboard({ tickets, onSelectTicket, onBack }: ScheduleDashboardProps) {
     const [currentTime, setCurrentTime] = useState(new Date());
 
     useEffect(() => {
@@ -104,11 +105,24 @@ export function ScheduleDashboard({ tickets, onSelectTicket }: ScheduleDashboard
                         initial={{ opacity: 0, x: -20 }}
                         animate={{ opacity: 1, x: 0 }}
                     >
-                        <h1 className="text-4xl font-black text-gray-900 tracking-tight flex items-center gap-3">
-                            Work <span className="text-indigo-600">Schedule</span>
-                            <div className="bg-indigo-100 text-indigo-600 text-[10px] uppercase font-black px-2.5 py-1 rounded-full border border-indigo-200 tracking-widest shadow-sm">Live Queue</div>
-                        </h1>
-                        <p className="text-gray-500 mt-2 font-bold text-sm">Prioritized tasks based on SLA urgency and case importance.</p>
+                        <div className="flex items-center justify-between gap-4">
+                            <div>
+                                <h1 className="text-4xl font-black text-gray-900 tracking-tight flex items-center gap-3">
+                                    Work <span className="text-indigo-600">Schedule</span>
+                                    <div className="bg-indigo-100 text-indigo-600 text-[10px] uppercase font-black px-2.5 py-1 rounded-full border border-indigo-200 tracking-widest shadow-sm">Live Queue</div>
+                                </h1>
+                                <p className="text-gray-500 mt-2 font-bold text-sm">Prioritized tasks based on SLA urgency and case importance.</p>
+                            </div>
+                            {onBack && (
+                                <button 
+                                    onClick={onBack}
+                                    className="flex items-center gap-2 px-6 py-2.5 bg-white border border-gray-200 rounded-2xl text-[10px] font-black uppercase tracking-widest text-gray-500 hover:text-indigo-600 hover:border-indigo-200 hover:shadow-lg transition-all"
+                                >
+                                    <Inbox size={14} />
+                                    Back to Inbox
+                                </button>
+                            )}
+                        </div>
                     </motion.div>
                 </div>
 

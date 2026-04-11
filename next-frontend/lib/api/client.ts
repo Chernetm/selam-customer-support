@@ -1,4 +1,6 @@
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8090/api';
+const BASE_URL = API_URL.endsWith('/') ? API_URL.slice(0, -1) : API_URL;
+
 
 const getAuthHeaders = (endpoint: string): Record<string, string> => {
   const headers: Record<string, string> = {};
@@ -31,18 +33,21 @@ const client = {
       ...getAuthHeaders(endpoint),
     };
 
-    const response = await fetch(`${BASE_URL}${endpoint}`, {
+    const url = `${BASE_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
+    console.log(`[API] POST ${url}`, data);
+
+    const response = await fetch(url, {
       method: 'POST',
       headers,
       body: JSON.stringify(data),
     });
 
     if (response.status === 401) {
-      if (typeof window !== 'undefined') {
+      if (typeof window !== 'undefined' && !endpoint.includes('/login')) {
         localStorage.clear();
-        window.location.href = '/';
+        window.location.href = '/login';
       }
-      throw new Error('Session expired. Please login again.');
+      throw new Error('Session expired or Unauthorized. Please login again.');
     }
 
     if (!response.ok) {
@@ -63,8 +68,11 @@ const client = {
 
   async get(endpoint: string) {
     const headers = getAuthHeaders(endpoint);
+    const url = `${BASE_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
+    
+    console.log(`[API] GET ${url}`);
 
-    const response = await fetch(`${BASE_URL}${endpoint}`, {
+    const response = await fetch(url, {
       method: 'GET',
       headers,
     });
@@ -72,7 +80,7 @@ const client = {
     if (response.status === 401) {
       if (typeof window !== 'undefined') {
         localStorage.clear();
-        window.location.href = '/';
+        window.location.href = '/login';
       }
       throw new Error('Session expired. Please login again.');
     }

@@ -129,6 +129,8 @@ export const am = {
       rateFailure: "ግምገማውን ማስገባት አልተቻለም።"
     },
     searchPlaceholder: "ግንኙነቶችን ይፈልጉ...",
+    searchAgentPlaceholder: "የወኪል ስም ይፈልጉ...",
+    searchCustomerPlaceholder: "የደንበኛ ስም ይፈልጉ...",
     noTransmissions: "ምንም ግንኙነቶች የሉም",
     noTransmissionsSub: "ለመጀመር የ (+) አዝራሩን በመጠቀም ደህንነቱ የተጠበቀ ግንኙነት ይጀምሩ።",
     establishLink: "ደህንነቱ የተጠበቀ ግንኙነት ይፍጠሩ",
@@ -188,7 +190,7 @@ export const am = {
     strongerPassword: "እባክዎን ጠንካራ የይለፍ ቃል ይጠቀሙ",
     registrationSuccess: "አካውንት በተሳካ ሁኔታ ተፈጥሯል",
     registrationFailed: "ምዝገባው አልተሳካም።",
-    loginFailed: "መግባት አልተሳካም። እባክዎን መለያዎን ያረጋግጡ እና እንደገና ይሞክሩ።",
+    loginFailed: "ትክክለኛ ያልሆነ ኢሜይል ወይም የይለፍ ቃል። እባክዎን መለያዎን ያረጋግጡ እና እንደገና ይሞክሩ።",
     empoweringSupport: "አስተማማኝ ድጋፍ",
     welcomeBackPortal: "እንኳን ወደ ፖርታልዎ በሰላም መጡ",
     freeAccountDesc: "ነፃ ነው እና ከአንድ ደቂቃ ያነሰ ጊዜ ይወስዳል።",

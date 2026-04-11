@@ -102,6 +102,15 @@ func (r *ticketRepository) FindAll(filter map[string]interface{}) ([]models.Tick
 		query = query.Where("status = ?", val)
 	}
 
+	if val, ok := filter["search"]; ok && val != "" {
+		searchStr := "%" + fmt.Sprintf("%v", val) + "%"
+		query = query.
+			Joins("LEFT JOIN customers ON customers.id = tickets.customer_id").
+			Joins("LEFT JOIN admins ON admins.id = tickets.agent_id").
+			Where("customers.name ILIKE ? OR tickets.complaint_description ILIKE ? OR CAST(tickets.id AS TEXT) LIKE ? OR admins.first_name ILIKE ? OR admins.last_name ILIKE ?", 
+				searchStr, searchStr, searchStr, searchStr, searchStr)
+	}
+
 	if val, ok := filter["start_date"]; ok {
 		query = query.Where("created_at >= ?", val)
 	}

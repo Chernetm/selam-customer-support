@@ -36,6 +36,7 @@ export default function LoginForm({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log(`[LoginForm] Submitting ${userType} login for: ${email}`);
     setError('');
     setLoading(true);
 
@@ -43,6 +44,8 @@ export default function LoginForm({
       const data = userType === 'admin'
         ? await loginAdmin({ email, password })
         : await loginCustomer({ email, password });
+      
+      console.log('[LoginForm] Login successful:', data);
 
       if (typeof window !== 'undefined') {
         const prefix = userType === 'admin' ? 'admin' : 'customer';
@@ -66,21 +69,31 @@ export default function LoginForm({
         }
 
         // Redirect based on role and type
-        if (userType === 'admin') {
-          if (data.user?.role === 'super-admin') {
-            router.push('/dashboard');
+        setTimeout(() => {
+          if (userType === 'admin') {
+            if (data.user?.role === 'super-admin') {
+              window.location.href = '/dashboard';
+            } else {
+              window.location.href = '/admin/chat';
+            }
           } else {
-            router.push('/admin/chat');
+            window.location.href = '/chat';
           }
-        } else {
-          router.push('/chat');
-        }
+        }, 100);
       }
     } catch (err: any) {
-      if (err.message) {
-        setError(err.message);
-      } else {
+      const msg = err.message || '';
+      // Map technical auth errors to a user-friendly message
+      if (
+        msg.includes('INVALID_LOGIN_CREDENTIALS') || 
+        msg.includes('not found locally') || 
+        msg.includes('firebase auth failed') ||
+        msg.includes('Unauthorized') ||
+        msg.includes('invalid password')
+      ) {
         setError(t('auth.loginFailed'));
+      } else {
+        setError(msg || t('auth.loginFailed'));
       }
     } finally {
       setLoading(false);

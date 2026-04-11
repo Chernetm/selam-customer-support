@@ -59,8 +59,8 @@ export function Navbar() {
                   key={link.name}
                   href={link.path}
                   className={clsx(
-                    "text-xs font-black tracking-widest transition-all duration-300 hover:text-white",
-                    pathname === link.path ? "text-white" : "text-slate-400/80"
+                    "text-base font-medium transition-all duration-300 hover:text-blue-500",
+                    pathname === link.path ? "text-blue-400" : "text-white"
                   )}
                 >
                   {link.name}

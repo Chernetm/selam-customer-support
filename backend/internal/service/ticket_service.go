@@ -13,14 +13,15 @@ import (
 type TicketService interface {
 	CreateTicket(ticket *models.Ticket) (*models.Ticket, error)
 	GetTicketByID(id uint, customerID uint) (*models.Ticket, error)
-	GetCustomerTickets(customerID uint) ([]models.Ticket, error)
-	GetAgentTickets(agentID uint64) ([]models.Ticket, error)
+	GetCustomerTickets(customerID uint, search string) ([]models.Ticket, error)
+	GetAgentTickets(agentID uint64, search string) ([]models.Ticket, error)
 	GetManagerTickets(managerID uint64) ([]models.Ticket, error)
-	GetAllTickets() ([]models.Ticket, error)
+	GetAllTickets(search string) ([]models.Ticket, error)
 	CloseTicket(id uint, closedBy uint64, summary string) (*models.Ticket, error)
 	ReassignTicket(ticketID uint, newAgentID uint64, adminID uint64, reason string) error
 	EscalateTicket(ticketID uint, managerID uint64, escalatedBy uint64, reason string) error
 	GetTicketReports(startDate, endDate time.Time) (*models.ReportResponse, error)
+	InviteInPerson(id uint, adminID uint64) (*models.Ticket, error)
 	
 	CreateRating(ticketID uint, customerID uint, score int, comment string) (*models.Rating, error)
 	GetRating(ticketID uint, customerID uint) (*models.Rating, error)
@@ -394,6 +395,54 @@ func (s *ticketService) CloseTicket(id uint, closedBy uint64, summary string) (*
 }
 
 // ////////////////////////////////////////////////////////////
+// INVITE IN-PERSON
+// ////////////////////////////////////////////////////////////
+
+func (s *ticketService) InviteInPerson(id uint, adminID uint64) (*models.Ticket, error) {
+	ticket, err := s.repo.FindByID(id, 0)
+	if err != nil {
+		return nil, errors.New("ticket not found")
+	}
+
+	// Permission check: Only assigned agent or escalated owner can invite
+	isAgent := ticket.AgentID != nil && *ticket.AgentID == adminID
+	isEscalatedOwner := false
+	for _, esc := range ticket.Escalations {
+		if esc.Status == "open" && esc.EscalatedTo != nil && *esc.EscalatedTo == adminID {
+			isEscalatedOwner = true
+			break
+		}
+	}
+
+	if !isAgent && !isEscalatedOwner {
+		return nil, errors.New("unauthorized: move restricted to assigned officers")
+	}
+
+	// Generate 8-character code
+	const charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	b := make([]byte, 8)
+	for i := range b {
+		b[i] = charset[time.Now().UnixNano()%int64(len(charset))]
+		time.Sleep(1 * time.Nanosecond) // Ensure slightly different nanosecs for randomness
+	}
+
+	ticket.Status = "in-person"
+	ticket.InviteCode = string(b)
+	exp := time.Now().Add(5 * 24 * time.Hour)
+	ticket.InviteExpiresAt = &exp
+
+	if err := s.repo.Update(ticket); err != nil {
+		return nil, err
+	}
+
+	// Notify room
+	room := fmt.Sprintf("ticket-%d", id)
+	s.socket.Emit(room, "ticketUpdated", ticket)
+
+	return ticket, nil
+}
+
+// ////////////////////////////////////////////////////////////
 // GETTERS
 // ////////////////////////////////////////////////////////////
 
@@ -401,15 +450,17 @@ func (s *ticketService) GetTicketByID(id uint, customerID uint) (*models.Ticket,
 	return s.repo.FindByID(id, customerID)
 }
 
-func (s *ticketService) GetCustomerTickets(customerID uint) ([]models.Ticket, error) {
+func (s *ticketService) GetCustomerTickets(customerID uint, search string) ([]models.Ticket, error) {
 	return s.repo.FindAll(map[string]interface{}{
 		"customer_id": customerID,
+		"search":      search,
 	})
 }
 
-func (s *ticketService) GetAgentTickets(agentID uint64) ([]models.Ticket, error) {
+func (s *ticketService) GetAgentTickets(agentID uint64, search string) ([]models.Ticket, error) {
 	return s.repo.FindAll(map[string]interface{}{
 		"any_admin_id": agentID,
+		"search":       search,
 	})
 }
 
@@ -419,8 +470,10 @@ func (s *ticketService) GetManagerTickets(managerID uint64) ([]models.Ticket, er
 	})
 }
 
-func (s *ticketService) GetAllTickets() ([]models.Ticket, error) {
-	return s.repo.FindAll(map[string]interface{}{})
+func (s *ticketService) GetAllTickets(search string) ([]models.Ticket, error) {
+	return s.repo.FindAll(map[string]interface{}{
+		"search": search,
+	})
 }
 
 func (s *ticketService) GetTicketReports(startDate, endDate time.Time) (*models.ReportResponse, error) {

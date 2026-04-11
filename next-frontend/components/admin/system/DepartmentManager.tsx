@@ -101,7 +101,7 @@ export function DepartmentManager() {
             className="text-black placeholder:text-gray-400"
           />
         </div>
-        <Button onClick={() => { resetForm(); setIsModalOpen(true); }} className="w-full md:w-auto">
+        <Button onClick={() => { resetForm(); setIsModalOpen(true); }} className="w-full md:w-auto h-11 px-8 rounded-xl bg-indigo-600 hover:bg-indigo-700 shadow-xl shadow-indigo-100 font-bold uppercase tracking-widest text-[10px]">
           <Plus className="w-4 h-4 mr-2" />
           Add Department
         </Button>

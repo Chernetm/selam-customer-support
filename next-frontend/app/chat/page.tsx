@@ -27,6 +27,7 @@ import { ChatHeader } from '@/components/chat/ChatHeader';
 import { ChatInfoSidebar } from '@/components/chat/ChatInfoSidebar';
 import { RatingBlock } from '@/components/chat/RatingBlock';
 import { CaseSelectorModal } from '@/components/chat/CaseSelectorModal';
+import { InPersonInviteCard } from '@/components/chat/InPersonInviteCard';
 import { useLanguage } from '@/contexts/LanguageContext';
 // @ts-ignore
 import { jwtDecode } from 'jwt-decode';
@@ -73,6 +74,16 @@ export default function CustomerChatPage() {
   }, []);
 
   // ---------------- INIT & AUTH ----------------
+  const fetchTickets = async () => {
+    try {
+      const ticketsData = await chatApi.getCustomerTickets(100, 0); // Increased limit to have more for frontend filter
+      setTickets(ticketsData || []);
+      ticketsData?.forEach(t => socket.emit("joinTicket", t.id));
+    } catch (error) {
+      console.error("Failed to fetch tickets:", error);
+    }
+  };
+
   useEffect(() => {
     const init = async () => {
       const token = localStorage.getItem("customerToken");
@@ -86,14 +97,10 @@ export default function CustomerChatPage() {
         setCustomerInfo(decoded);
         socket.emit("customerLogin", token);
 
-        const [ticketsData, casesData] = await Promise.all([
-          chatApi.getCustomerTickets(50, 0),
-          chatApi.getCases()
-        ]);
-
-        setTickets(ticketsData || []);
+        const casesData = await chatApi.getCases();
         setCases(casesData || []);
-        ticketsData.forEach(t => socket.emit("joinTicket", t.id));
+        
+        await fetchTickets();
       } catch (error) {
         console.error("Failed to initialize chat:", error);
       } finally {
@@ -103,6 +110,7 @@ export default function CustomerChatPage() {
 
     init();
   }, [router]);
+
 
   // ---------------- SELECTION ----------------
   const handleSelectTicket = async (ticket: ChatTicket) => {
@@ -355,10 +363,18 @@ export default function CustomerChatPage() {
     }
   };
 
-  const filteredTickets = tickets.filter(t => 
-    t.subject?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    t.id.toString().includes(searchQuery)
-  );
+  const filteredTickets = tickets.filter(t => {
+    const searchLow = searchQuery.toLowerCase();
+    const agentName = t.agent ? `${t.agent.firstName} ${t.agent.lastName}`.toLowerCase() : '';
+    const agentNameSimple = t.agentName?.toLowerCase() || '';
+    
+    return (
+      t.subject?.toLowerCase().includes(searchLow) ||
+      t.id.toString().includes(searchQuery) ||
+      agentName.includes(searchLow) ||
+      agentNameSimple.includes(searchLow)
+    );
+  });
 
   return (
     <div className="flex h-[calc(100vh-64px)] bg-[#F8FAFC] overflow-hidden">
@@ -373,8 +389,8 @@ export default function CustomerChatPage() {
                   <Zap className="text-white w-5 h-5 fill-current" />
                </div>
                <div>
-                  <h1 className="text-lg font-black text-gray-900 tracking-tight leading-none uppercase">Nexus</h1>
-                  <span className="text-[10px] font-black text-indigo-500 tracking-[0.2em] uppercase">Intelligence</span>
+                  <h1 className="text-lg font-black text-gray-900 tracking-tight leading-none uppercase">{t('common.brand')}</h1>
+                  <span className="text-[10px] font-black text-indigo-500 tracking-[0.2em] uppercase">{t('common.enterprise')}</span>
                </div>
             </div>
             <Button 
@@ -390,7 +406,7 @@ export default function CustomerChatPage() {
           <div className="relative group">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4 transition-colors group-focus-within:text-indigo-600" />
             <Input 
-              placeholder={t('chat.searchPlaceholder')} 
+              placeholder={t('chat.searchAgentPlaceholder')} 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-11 h-11 bg-gray-50 border-transparent rounded-xl focus:ring-4 focus:ring-indigo-100/50 transition-all font-bold text-black text-xs"
@@ -448,6 +464,12 @@ export default function CustomerChatPage() {
                   className="flex-1 overflow-y-auto p-6 md:p-10 space-y-4 custom-scrollbar"
                   style={{ scrollBehavior: 'smooth' }}
                 >
+                   {selectedTicket.status === 'in-person' && selectedTicket.inviteCode && (
+                     <InPersonInviteCard 
+                        inviteCode={selectedTicket.inviteCode}
+                        expiresAt={selectedTicket.inviteExpiresAt || new Date().toISOString()}
+                     />
+                   )}
                    <AnimatePresence mode="popLayout">
                      {messages.reduce((acc: any[], msg, idx) => {
                        const msgDate = new Date(msg.createdAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric' });

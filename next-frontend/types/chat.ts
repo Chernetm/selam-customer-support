@@ -39,9 +39,11 @@ export interface ChatTicket {
   agentName?: string;
   agent?: { firstName: string; lastName: string };
   subject: string;
-  status: 'open' | 'pending' | 'closed' | 'escalated';
+  status: 'open' | 'pending' | 'closed' | 'escalated' | 'in-person';
   priority?: 'Urgent' | 'High' | 'Medium' | 'Low' | string;
   deadlineAt?: string;
+  inviteCode?: string;
+  inviteExpiresAt?: string;
   caseId?: number;
   caseName?: string;
   lastMessage?: string;

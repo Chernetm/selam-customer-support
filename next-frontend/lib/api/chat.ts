@@ -20,8 +20,8 @@ export const chatApi = {
   },
 
   // Admin specific
-  async getAgentTickets(limit = 10, offset = 0): Promise<ChatTicket[]> {
-    const response = await client.get(`/admin/tickets?limit=${limit}&offset=${offset}`);
+  async getAgentTickets(limit = 10, offset = 0, search = ""): Promise<ChatTicket[]> {
+    const response = await client.get(`/admin/tickets?limit=${limit}&offset=${offset}${search ? `&search=${encodeURIComponent(search)}` : ''}`);
     return response.data;
   },
 
@@ -36,8 +36,8 @@ export const chatApi = {
   },
 
   // Customer specific
-  async getCustomerTickets(limit = 10, offset = 0): Promise<ChatTicket[]> {
-    const response = await client.get(`/customer/tickets?limit=${limit}&offset=${offset}`);
+  async getCustomerTickets(limit = 10, offset = 0, search = ""): Promise<ChatTicket[]> {
+    const response = await client.get(`/customer/tickets?limit=${limit}&offset=${offset}${search ? `&search=${encodeURIComponent(search)}` : ''}`);
     return response.data;
   },
 
@@ -95,6 +95,11 @@ export const chatApi = {
       managerId,
       reason
     });
+    return response.data;
+  },
+  
+  async inviteInPerson(ticketId: number) {
+    const response = await client.put(`/admin/tickets/${ticketId}/invite`, {});
     return response.data;
   }
 };

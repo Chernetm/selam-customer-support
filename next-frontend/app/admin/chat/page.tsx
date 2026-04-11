@@ -2,6 +2,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -31,6 +32,7 @@ import { ChatInfoSidebar } from '@/components/chat/ChatInfoSidebar';
 import { ScheduleDashboard } from '@/components/chat/ScheduleDashboard';
 import { CloseTicketModal } from '@/components/chat/CloseTicketModal';
 import { TransferTicketModal } from '@/components/chat/TransferTicketModal';
+import { InviteInPersonModal } from '@/components/chat/InviteInPersonModal';
 import { uploadToCloudinary } from '@/lib/utils/cloudinaryUpload';
 import { ChatRating } from '@/types/chat';
 import { Suspense } from 'react';
@@ -39,6 +41,7 @@ import { toast } from 'react-hot-toast';
 function AdminChat() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { t } = useLanguage();
   const ticketIdFromUrl = searchParams.get('ticketId');
 
   const [tickets, setTickets] = useState<ChatTicket[]>([]);
@@ -54,6 +57,7 @@ function AdminChat() {
   const [isInfoOpen, setIsInfoOpen] = useState(false);
   const [isCloseModalOpen, setIsCloseModalOpen] = useState(false);
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
+  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [activeFilter, setActiveFilter] = useState<'all' | 'schedule'>('all');
 
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -377,10 +381,30 @@ function AdminChat() {
     toast.success("Ticket resolved successfully");
   };
 
+  const confirmInviteInPerson = async (ticketId: number) => {
+    const data = await chatApi.inviteInPerson(ticketId);
+    
+    setTickets(prev => prev.map(t => 
+      t.id === ticketId ? { ...t, status: 'in-person', inviteCode: data.ticket.inviteCode, inviteExpiresAt: data.ticket.inviteExpiresAt } : t
+    ));
+
+    if (selectedTicket?.id === ticketId) {
+      setSelectedTicket(prev => prev ? { 
+        ...prev, 
+        status: 'in-person', 
+        inviteCode: data.ticket.inviteCode, 
+        inviteExpiresAt: data.ticket.inviteExpiresAt 
+      } : null);
+    }
+
+    toast.success("In-person pulse issued successfully");
+  };
+
   const handleAction = (action: string) => {
     if (action === 'info') setIsInfoOpen(!isInfoOpen);
     if (action === 'close') handleCloseTicket();
     if (action === 'transfer') setIsTransferModalOpen(true);
+    if (action === 'invite') setIsInviteModalOpen(true);
   };
 
   const handleTransferSuccess = (type: 'reassign' | 'escalate', target: any) => {
@@ -394,9 +418,9 @@ function AdminChat() {
 
   const filteredTickets = tickets.filter(t => {
     const matchesSearch = 
-      t.subject?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       t.customerName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       t.customer?.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      t.subject?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       t.id.toString().includes(searchQuery);
     
     if (activeFilter === 'all') return matchesSearch;
@@ -416,7 +440,7 @@ function AdminChat() {
     <div className="flex h-[calc(100vh-64px)] bg-[#F8FAFC] overflow-hidden">
       {/* Sidebar - Desktop Only */}
       <div className={`w-full lg:w-96 flex flex-col bg-white border-r border-gray-100 transition-all ${
-        isMobileView && showChatOnMobile ? 'hidden' : 'flex'
+        (isMobileView && showChatOnMobile) || (activeFilter === 'schedule' && !selectedTicket) ? 'hidden' : 'flex'
       }`}>
         <div className="p-6 border-b border-gray-100/50">
           <div className="flex items-center justify-between mb-6">
@@ -425,8 +449,8 @@ function AdminChat() {
                   <Zap className="text-white w-5 h-5 fill-current" />
                </div>
                <div>
-                  <h1 className="text-lg font-black text-gray-900 tracking-tight leading-none uppercase">Nexus</h1>
-                  <span className="text-[10px] font-black text-indigo-500 tracking-[0.2em] uppercase">Intelligence</span>
+                  <h1 className="text-lg font-black text-gray-900 tracking-tight leading-none uppercase">{t('common.brand')}</h1>
+                  <span className="text-[10px] font-black text-indigo-500 tracking-[0.2em] uppercase">{t('common.enterprise')}</span>
                </div>
             </div>
           </div>
@@ -434,7 +458,7 @@ function AdminChat() {
           <div className="relative group mb-4">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4 transition-colors group-focus-within:text-indigo-600" />
             <Input 
-              placeholder="Search identities..." 
+              placeholder={t('chat.searchCustomerPlaceholder')} 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-11 h-11 bg-gray-50 border-transparent rounded-xl focus:ring-4 focus:ring-indigo-100/50 transition-all font-bold text-black text-xs"
@@ -444,7 +468,10 @@ function AdminChat() {
           {/* Filter Tabs */}
           <div className="flex p-1 bg-gray-50 rounded-xl relative">
              <button 
-               onClick={() => setActiveFilter('all')}
+               onClick={() => {
+                  setActiveFilter('all');
+                  setSearchQuery('');
+                }}
                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all z-10 ${
                  activeFilter === 'all' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'
                }`}
@@ -458,7 +485,12 @@ function AdminChat() {
                </span>
              </button>
              <button 
-               onClick={() => setActiveFilter('schedule')}
+               onClick={() => {
+                  setActiveFilter('schedule');
+                  setSelectedTicket(null);
+                  setSearchQuery('');
+                  if (isMobileView) setShowChatOnMobile(true);
+                }}
                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all z-10 ${
                  activeFilter === 'schedule' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'
                }`}
@@ -566,6 +598,10 @@ function AdminChat() {
             <ScheduleDashboard 
               tickets={filteredTickets} 
               onSelectTicket={handleSelectTicket} 
+              onBack={() => {
+                setActiveFilter('all');
+                if (isMobileView) setShowChatOnMobile(false);
+              }}
             />
           </div>
         ) : (
@@ -621,6 +657,13 @@ function AdminChat() {
         onClose={() => setIsTransferModalOpen(false)}
         ticket={selectedTicket}
         onTransferSuccess={handleTransferSuccess}
+      />
+
+      <InviteInPersonModal 
+        isOpen={isInviteModalOpen}
+        onClose={() => setIsInviteModalOpen(false)}
+        onConfirm={confirmInviteInPerson}
+        ticketId={selectedTicket?.id || null}
       />
     </div>
   );

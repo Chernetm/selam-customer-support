@@ -15,7 +15,8 @@ import {
   Shield,
   Zap,
   Search,
-  UserPlus
+  UserPlus,
+  MapPin
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { ChatTicket, ChatRating } from '@/types/chat';
@@ -136,6 +137,16 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
               title="Transfer / Escalate"
             >
               <UserPlus size={20} />
+            </Button>
+
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={() => onAction?.('invite')}
+              className="h-10 w-10 p-0 rounded-full text-gray-400 hover:text-amber-600 hover:bg-amber-50 transition-all"
+              title="Invite In-Person"
+            >
+              <MapPin size={20} />
             </Button>
 
             <Button 

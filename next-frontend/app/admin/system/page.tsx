@@ -23,7 +23,7 @@ export default function SystemManagementPage() {
   const [activeTab, setActiveTab] = useState<'departments' | 'cases'>('departments');
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] pb-32 relative overflow-hidden">
+    <div className="min-h-screen bg-[#F8FAFC] pb-32 relative">
       {/* Background Ambience */}
       <div className="absolute top-0 left-0 w-full h-[500px] bg-gradient-to-b from-indigo-50/50 to-transparent -z-10" />
       
@@ -114,7 +114,7 @@ export default function SystemManagementPage() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.4 }}
-              className="bg-white/80 backdrop-blur-2xl rounded-[3rem] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.08)] border border-white overflow-hidden"
+              className="bg-white/80 backdrop-blur-2xl rounded-[3rem] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.08)] border border-white"
             >
               {activeTab === 'departments' ? (
                 <DepartmentManager />

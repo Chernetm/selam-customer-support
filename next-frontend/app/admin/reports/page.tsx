@@ -26,6 +26,10 @@ import { Input } from '@/components/ui/Input';
 import { chatApi } from '@/lib/api/chat';
 import clsx from 'clsx';
 import { format } from 'date-fns';
+import ExcelJS from 'exceljs';
+import { saveAs } from 'file-saver';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 export default function AdminReportsPage() {
   const router = useRouter();
@@ -70,30 +74,117 @@ export default function AdminReportsPage() {
     t.subject?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const downloadCSV = () => {
+  const downloadExcel = async () => {
     if (filteredTickets.length === 0) return;
-    const headers = ["ID", "Date", "Subject", "Customer", "Company", "Status", "Case Type", "Agent", "Escalated To"];
-    const rows = filteredTickets.map(t => [
-      t.id, 
-      format(new Date(t.createdAt), 'yyyy-MM-dd'), 
-      `"${t.subject?.replace(/"/g, '""')}"`, 
-      `"${t.customerName?.replace(/"/g, '""')}"`, 
-      `"${t.company?.replace(/"/g, '""') || 'N/A'}"`, 
-      t.ticketStatus?.toUpperCase(), 
-      t.caseName || 'General', 
-      t.agentName || 'Unassigned', 
-      t.escalatedTo || 'N/A'
-    ]);
+    
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Issues Report');
 
-    const csvContent = [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", `selam_report_${period}_${format(new Date(), 'yyyyMMdd')}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    // Define columns
+    worksheet.columns = [
+      { header: 'ID', key: 'id', width: 10 },
+      { header: 'Subject', key: 'subject', width: 35 },
+      { header: 'Customer', key: 'customerName', width: 25 },
+      { header: 'Company', key: 'company', width: 25 },
+      { header: 'Status', key: 'ticketStatus', width: 15 },
+      { header: 'Case Type', key: 'caseName', width: 20 },
+      { header: 'Agent', key: 'agentName', width: 25 },
+      { header: 'Date', key: 'createdAt', width: 15 },
+    ];
+
+    // Style the header
+    const headerRow = worksheet.getRow(1);
+    headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    headerRow.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FF4F46E5' }, // indigo-600
+    };
+    headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
+
+    // Add rows
+    filteredTickets.forEach(t => {
+      worksheet.addRow({
+        id: t.id,
+        subject: t.subject,
+        customerName: t.customerName || 'Customer',
+        company: t.company || 'N/A',
+        ticketStatus: t.ticketStatus?.toUpperCase(),
+        caseName: t.caseName || 'General',
+        agentName: t.agentName || 'Unassigned',
+        createdAt: format(new Date(t.createdAt), 'yyyy-MM-dd'),
+      });
+    });
+
+    // Write to buffer and save
+    const buffer = await workbook.xlsx.writeBuffer();
+    saveAs(new Blob([buffer]), `selam_issues_${period}_${format(new Date(), 'yyyyMMdd')}.xlsx`);
+  };
+
+  const downloadSummaryPDF = () => {
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    
+    // Header & Branding
+    doc.setFontSize(22);
+    doc.setTextColor(79, 70, 229); // indigo-600
+    doc.text('SELAM', 20, 20);
+    doc.setFontSize(10);
+    doc.setTextColor(156, 163, 175);
+    doc.text('CUSTOMER SUPPORT ANALYTICS', 20, 26);
+    
+    doc.setDrawColor(229, 231, 235);
+    doc.line(20, 32, pageWidth - 20, 32);
+
+    // Report Info
+    doc.setFontSize(18);
+    doc.setTextColor(17, 24, 39);
+    doc.text(`${period.toUpperCase()} PERFORMANCE REPORT`, 20, 45);
+    doc.setFontSize(10);
+    doc.setTextColor(107, 114, 128);
+    doc.text(`Generated on: ${format(new Date(), 'MMMM d, yyyy HH:mm')}`, 20, 52);
+
+    // Summary Statistics
+    doc.setFontSize(14);
+    doc.setTextColor(31, 41, 55);
+    doc.text('Operational Overview', 20, 65);
+    
+    autoTable(doc, {
+      startY: 70,
+      head: [['Metric', 'Value']],
+      body: [
+        ['Synchronized Issues', stats.total.toString()],
+        ['Escalation Frequency', stats.escalated.toString()],
+        ['Resolution Success', stats.closed.toString()],
+        ['Customer Matrix', stats.servedCustomers.toString()],
+        ['Avg Latency', `${stats.avgResponse}h`],
+        ['Optimization Rate', `${(stats.closed / (stats.total || 1) * 100).toFixed(1)}%`],
+      ],
+      theme: 'striped',
+      headStyles: { fillColor: [79, 70, 229] },
+      margin: { left: 20, right: 20 },
+    });
+
+    // Status Distribution Note
+    const finalY = (doc as any).lastAutoTable.finalY || 120;
+    doc.setFontSize(14);
+    doc.text('Executive Summary', 20, finalY + 15);
+    doc.setFontSize(10);
+    doc.setTextColor(75, 85, 99);
+    const summaryText = `During this ${period} cycle, our system synchronized a total of ${stats.total} issues. ` +
+      `We achieved a resolution rate of ${(stats.closed / (stats.total || 1) * 100).toFixed(1)}%, with ` +
+      `${stats.escalated} issues requiring advanced synchronization (escalation). ` +
+      `The average response latency of ${stats.avgResponse} hours reflects our current operational pulse.`;
+    
+    const splitText = doc.splitTextToSize(summaryText, pageWidth - 40);
+    doc.text(splitText, 20, finalY + 22);
+
+    // Footer
+    doc.setFontSize(8);
+    doc.setTextColor(156, 163, 175);
+    doc.text('CONFIDENTIAL - FOR INTERNAL USE ONLY', pageWidth / 2, 285, { align: 'center' });
+
+    doc.save(`selam_summary_${period}_${format(new Date(), 'yyyyMMdd')}.pdf`);
   };
 
   return (
@@ -200,9 +291,13 @@ export default function AdminReportsPage() {
               </div>
               
               <div className="flex gap-4 w-full md:w-auto">
-                 <Button className="flex-1 md:flex-none h-14 px-8 rounded-2xl bg-indigo-50 hover:bg-indigo-100 text-indigo-600 font-black uppercase tracking-widest text-xs transition-all active:scale-95 border border-indigo-100" onClick={downloadCSV} disabled={filteredTickets.length === 0}>
-                    <Download size={18} className="mr-2" />
-                    Export Matrix
+                 <Button className="flex-1 md:flex-none h-14 px-8 rounded-2xl bg-indigo-50 hover:bg-indigo-100 text-indigo-600 font-black uppercase tracking-widest text-[10px] transition-all active:scale-95 border border-indigo-100 shadow-sm" onClick={downloadExcel} disabled={filteredTickets.length === 0}>
+                    <Download size={16} className="mr-2" />
+                    Export Excel
+                 </Button>
+                 <Button className="flex-1 md:flex-none h-14 px-8 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-black uppercase tracking-widest text-[10px] transition-all active:scale-95 shadow-xl shadow-indigo-200" onClick={downloadSummaryPDF} disabled={!summary}>
+                    <FileText size={16} className="mr-2" />
+                    Download PDF Summary
                  </Button>
               </div>
            </div>
